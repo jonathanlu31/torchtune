@@ -18,6 +18,7 @@ from torchtune.modules.attention_utils import (
     _SUPPORTS_FLEX_ATTENTION,
     create_block_causal_mask,
     packed_block_causal_mask,
+    packed_prefix_block_causal_mask
 )
 
 

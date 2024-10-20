@@ -341,6 +341,7 @@ class TransformerDecoder(nn.Module):
         self,
         *,
         tok_embeddings: nn.Embedding,
+        ISE_embeddings: nn.Embedding,
         layers: Union[nn.Module, List[nn.Module], nn.ModuleList],
         max_seq_len: int,
         num_heads: int,
@@ -349,6 +350,7 @@ class TransformerDecoder(nn.Module):
         output: Union[nn.Linear, Callable],
         num_layers: Optional[int] = None,
         output_hidden_states: Optional[List[int]] = None,
+        use_ise: bool = False,
     ) -> None:
         super().__init__()
         if isinstance(layers, nn.ModuleList):
@@ -363,10 +365,12 @@ class TransformerDecoder(nn.Module):
             layers = _get_clones(layers, num_layers)
 
         self.tok_embeddings = tok_embeddings
+        self.ISE_embeddings = ISE_embeddings
         self.layers = layers
         self.norm = norm
         self.output = output
         self.output_hidden_states = output_hidden_states or []
+        self.use_ise = use_ise
         self.max_seq_len = max_seq_len
         self.num_heads = num_heads
         self.head_dim = head_dim
@@ -518,6 +522,7 @@ class TransformerDecoder(nn.Module):
         self,
         tokens: torch.Tensor,
         *,
+        seg_ids: Optional[torch.Tensor] = None,
         mask: Optional[_MaskType] = None,
         encoder_input: Optional[torch.Tensor] = None,
         encoder_mask: Optional[torch.Tensor] = None,
@@ -591,6 +596,8 @@ class TransformerDecoder(nn.Module):
 
         # shape: [b, s, d]
         h = self.tok_embeddings(tokens)
+        if self.use_ise:
+            h += self.ISE_embeddings(seg_ids)
 
         hidden = []
         for i, layer in enumerate(self.layers):

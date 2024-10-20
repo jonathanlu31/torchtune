@@ -12,6 +12,7 @@ from torchtune.data._collate import (
     padded_collate_packed,
     padded_collate_sft,
     padded_collate_tiled_images_and_mask,
+    padded_collate_packed_prefix,
 )
 from torchtune.data._common import CROSS_ENTROPY_IGNORE_IDX
 from torchtune.data._converters import get_openai_messages, get_sharegpt_messages
@@ -64,5 +65,6 @@ __all__ = [
     "padded_collate",
     "padded_collate_tiled_images_and_mask",
     "padded_collate_packed",
+    "padded_collate_packed_prefix",
     "load_image",
 ]

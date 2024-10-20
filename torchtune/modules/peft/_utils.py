@@ -364,7 +364,7 @@ def validate_missing_and_unexpected_for_lora(
 
     if base_missing:
         for k in base_missing:
-            if not is_lora_param(k):
+            if not is_lora_param(k) and "ISE_embeddings" not in k:
                 raise AssertionError(f"Missing non-LoRA key {k} from base model dict")
     if base_unexpected:
         raise AssertionError("Unexpected key loading base model")

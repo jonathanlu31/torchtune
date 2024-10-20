@@ -110,9 +110,11 @@ def llama3_1(
     layers = nn.ModuleList(layers)
 
     tok_embeddings = nn.Embedding(vocab_size, embed_dim)
+    ISE_embeddings = nn.Embedding(3, embed_dim)
     output_proj = nn.Linear(embed_dim, vocab_size, bias=False)
     return TransformerDecoder(
         tok_embeddings=tok_embeddings,
+        ISE_embeddings=ISE_embeddings,
         layers=layers,
         max_seq_len=max_seq_len,
         num_heads=num_heads,
@@ -159,6 +161,7 @@ def lora_llama3_1(
     use_dora: bool = False,
     # Quantization args
     quantize_base: bool = False,
+    use_ise: bool = False,
 ) -> TransformerDecoder:
     """
     Return a version of Llama3.1 (an instance of :func:`~torchtune.modules.TransformerDecoder`)
@@ -246,6 +249,7 @@ def lora_llama3_1(
         layers.append(layer)
     layers = nn.ModuleList(layers)
     tok_embeddings = nn.Embedding(vocab_size, embed_dim)
+    ISE_embeddings = nn.Embedding(3, embed_dim)
 
     # TODO: quantize_base is not applied to final output_proj currently.
     adapter_cls = DoRALinear if use_dora else LoRALinear
@@ -256,12 +260,14 @@ def lora_llama3_1(
     )
     model = TransformerDecoder(
         tok_embeddings=tok_embeddings,
+        ISE_embeddings=ISE_embeddings,
         layers=layers,
         max_seq_len=max_seq_len,
         num_heads=num_heads,
         head_dim=(embed_dim // num_heads),
         norm=RMSNorm(embed_dim, eps=norm_eps),
         output=output_proj,
+        use_ise=use_ise,
     )
 
     if quantize_base:

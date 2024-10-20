@@ -35,7 +35,15 @@ if _SUPPORTS_FLEX_ATTENTION:
         v: torch.Tensor,
         block_mask: BlockMask,
     ) -> torch.Tensor:
-        return flex_attention_compiled(q, k, v, block_mask=block_mask)
+        kernel_options = {
+            "BLOCK_M": 64,
+            "BLOCK_N": 64,
+            "BLOCK_M1": 32,
+            "BLOCK_N1": 64,
+            "BLOCK_M2": 64,
+            "BLOCK_N2": 32,
+        }
+        return flex_attention_compiled(q, k, v, block_mask=block_mask, kernel_options=kernel_options)
 
     _MaskType = Union[torch.Tensor, BlockMask]
 else:
@@ -161,6 +169,62 @@ def packed_block_causal_mask(
         )
     else:
         return create_block_causal_mask(seq_lens=seq_lens)
+
+def packed_prefix_block_causal_mask(
+    tokens: torch.Tensor,
+    seg_ids: torch.Tensor,
+    seq_lens: List[torch.Tensor],
+) -> _MaskType:
+    """
+
+    Args:
+        tokens (torch.Tensor): _description_
+        seq_lens (List[torch.Tensor]): batch_size x n, where n is the number of sequences in the batch
+
+    Returns:
+        _MaskType: _description_
+    """
+    seq_ids = _get_document_ids_from_seq_lens(seq_lens).to('cuda')
+    batch_size, max_seq_len = seq_ids.shape
+    end_of_sys_idxs_per_seq = get_end_of_sys(seg_ids, seq_ids)
+    def doc_mask_wrapper(b, _h, q_idx, kv_idx):
+        same_doc = seq_ids[b, q_idx] == seq_ids[b, kv_idx]
+        causal_mask = q_idx >= kv_idx
+        system_prefix = kv_idx < end_of_sys_idxs_per_seq[b, seq_ids[b, q_idx]]
+        inner_mask = torch.logical_or(system_prefix, causal_mask)
+        return torch.logical_and(same_doc, inner_mask)
+
+    return create_block_causal_mask_flex(
+        doc_mask_wrapper,
+        batch_size,
+        None,
+        max_seq_len,
+        max_seq_len,
+        device="cuda",
+    )
+
+def get_end_of_sys(seg_ids, seq_ids) -> list[torch.Tensor]:
+    """
+    Get the end of sys idx for each sequence in the batch.
+
+    Args:
+        seg_ids (torch.Tensor): batch_size x max_seq_len
+
+    Returns:
+        list[torch.Tensor]: batch x num_sequences. Each item is the end of sys idx for the corresponding sequence.
+    """
+    # Each row has the end of sys idx for each seq in the row, except for seqs without a sys msg where it is zero instead
+    end_of_sys_idxs_per_seq = []
+    for i, row in enumerate(seg_ids):
+        zero_mask = row == 0
+        end_of_sys_idxs = torch.nonzero(zero_mask[:-1] & ~zero_mask[1:], as_tuple=True)[0] # Technically this is incorrect if the last token is part of the system message but it doesn't matter if you only train on assistant responses
+        sequences_with_end_sys = seq_ids[i, end_of_sys_idxs]
+        num_seqs = int(torch.max(seq_ids[i]).item()) + 1
+        end_of_sys_with_zeros = torch.zeros(num_seqs, device=seg_ids.device)
+        end_of_sys_with_zeros[sequences_with_end_sys] = end_of_sys_idxs
+        end_of_sys_idxs_per_seq.append(end_of_sys_with_zeros)
+
+    return end_of_sys_idxs_per_seq
 
 
 def _sdpa_or_flex_attention() -> Callable:

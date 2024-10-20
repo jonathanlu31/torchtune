@@ -7,6 +7,7 @@
 from torchtune.datasets import multimodal
 from torchtune.datasets._alpaca import alpaca_cleaned_dataset, alpaca_dataset
 from torchtune.datasets._chat import chat_dataset
+from torchtune.datasets._custom import custom_dataset
 from torchtune.datasets._cnn_dailymail import cnn_dailymail_articles_dataset
 from torchtune.datasets._concat import ConcatDataset
 from torchtune.datasets._grammar import grammar_dataset

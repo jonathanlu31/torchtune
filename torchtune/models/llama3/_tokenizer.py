@@ -263,7 +263,7 @@ class Llama3Tokenizer(ModelTokenizer, Transform):
         messages: List[Message],
         *,
         add_end_tokens: bool = True,
-    ) -> Tuple[List[int], List[bool]]:
+    ) -> Tuple[List[int], List[bool], List[int]]:
         """
         Tokenize a list of messages into a list of token ids and masks.
 
@@ -297,6 +297,8 @@ class Llama3Tokenizer(ModelTokenizer, Transform):
         tokens = [self.bos_id]
         # bos and eos are always masked
         mask = [True]
+        seg_ids = [0]
+        ise_map = {"system": 0, "user": 1, "assistant": 2}
 
         num_messages = len(templated_messages)
         for i, message in enumerate(templated_messages):
@@ -311,20 +313,23 @@ class Llama3Tokenizer(ModelTokenizer, Transform):
 
             tokens = tokens + tokenized_message
             mask = mask + ([message.masked] * len(tokenized_message))
+            seg_ids = seg_ids + ([ise_map[message.role]] * len(tokenized_message))
             if self.max_seq_len and len(tokens) >= self.max_seq_len:
                 break
 
         if add_end_tokens:
             tokens = tokens + [self.eos_id]
             mask = mask + [True]
+            seg_ids = seg_ids + [ise_map[message.role]]
 
         if self.max_seq_len:
             tokens = truncate(
                 tokens, self.max_seq_len, self.eos_id if add_end_tokens else None
             )
             mask = truncate(mask, self.max_seq_len, True if add_end_tokens else None)
+            seg_ids = truncate(seg_ids, self.max_seq_len, None)
 
-        return tokens, mask
+        return tokens, mask, seg_ids
 
     def __call__(
         self, sample: Mapping[str, Any], inference: bool = False
@@ -342,7 +347,9 @@ class Llama3Tokenizer(ModelTokenizer, Transform):
                 and the "messages" field removed.
         """
         messages = sample.pop("messages")
-        tokens, mask = self.tokenize_messages(messages, add_end_tokens=not inference)
+        tokens, mask, seg_ids = self.tokenize_messages(messages, add_end_tokens=not inference)
+        assert len(tokens) == len(mask) == len(seg_ids)
         sample["tokens"] = tokens
         sample["mask"] = mask
+        sample["seg_ids"] = seg_ids
         return sample

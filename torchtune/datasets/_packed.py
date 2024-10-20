@@ -109,6 +109,7 @@ class PackedDataset(Dataset):
             "labels": [],
             "input_pos": [],
             "seq_lens": [],
+            "seg_ids": [],
         }
 
         # Only show progress bar on rank 0
@@ -121,7 +122,7 @@ class PackedDataset(Dataset):
             pbar = tqdm(total=len(self.ds), desc="Packing dataset", dynamic_ncols=True)
 
         for sample in self.ds:
-            tokens, labels = sample["tokens"], sample["labels"]
+            tokens, labels, seg_ids = sample["tokens"], sample["labels"], sample["seg_ids"]
 
             # If the dataset outputs samples that are larger than the specified
             # max_seq_len and we're unable to split it, user needs to modify
@@ -135,6 +136,7 @@ class PackedDataset(Dataset):
 
             # Update the current pack
             current_pack["tokens"] += tokens
+            current_pack["seg_ids"] += seg_ids
             current_pack["labels"] += labels
             current_pack["input_pos"] += [x % self.max_seq_len for x in range(seq_len)]
             current_pack["seq_lens"] += [seq_len]
@@ -190,6 +192,7 @@ class PackedDataset(Dataset):
             "labels": current_pack["labels"][:boundary],
             "input_pos": current_pack["input_pos"][:boundary],
             "seq_lens": current_pack["seq_lens"][:-1] + seq_len_padding,
+            "seg_ids": current_pack["seg_ids"][:boundary],
         }
 
         # Process and add the pack
@@ -208,6 +211,7 @@ class PackedDataset(Dataset):
             "labels": current_pack["labels"][boundary:],
             "input_pos": current_pack["input_pos"][boundary:],
             "seq_lens": [next_seq_len],
+            "seg_ids": current_pack["seg_ids"][boundary:],
         }
 
     def _add_pack(self, pack: PACK_TYPE) -> None:
@@ -223,6 +227,7 @@ class PackedDataset(Dataset):
             "labels": torch.tensor(pack["labels"], dtype=torch.long),
             "input_pos": torch.tensor(pack["input_pos"], dtype=torch.long),
             "seq_lens": torch.tensor(pack["seq_lens"], dtype=torch.long),
+            "seg_ids": torch.tensor(pack["seg_ids"], dtype=torch.long),
         }
 
     def _pad_pack(self, pack: PACK_TYPE, padding_idx: int) -> PACK_TYPE:
@@ -249,6 +254,12 @@ class PackedDataset(Dataset):
             else pack["seq_lens"]
         )
 
+        padded_seg_ids = F.pad(
+            pack["seg_ids"],
+            (0, num_padding_tokens),
+            value=2, # shouldn't matter
+        )
+
         # Pad input_pos continuing the sequence from last value
         # in input_pos
         # e.g. [0 1 2] -> [0 1 2 3 4 5] for self.max_seq_len = 6
@@ -265,6 +276,7 @@ class PackedDataset(Dataset):
             "labels": padded_labels,
             "input_pos": padded_input_pos,
             "seq_lens": padded_seq_lens,
+            "seg_ids": padded_seg_ids,
         }
 
     def __len__(self) -> int:
