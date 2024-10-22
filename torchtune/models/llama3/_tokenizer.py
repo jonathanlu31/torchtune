@@ -297,8 +297,8 @@ class Llama3Tokenizer(ModelTokenizer, Transform):
         tokens = [self.bos_id]
         # bos and eos are always masked
         mask = [True]
-        seg_ids = [0]
         ise_map = {"system": 0, "user": 1, "assistant": 2}
+        seg_ids = [ise_map[templated_messages[0].role]]
 
         num_messages = len(templated_messages)
         for i, message in enumerate(templated_messages):

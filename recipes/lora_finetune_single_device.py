@@ -21,7 +21,7 @@ from torch.optim import Optimizer
 from torch.utils.data import DataLoader, DistributedSampler
 from torchtune import config, modules, training, utils
 from torchtune.config._utils import _get_component_from_path
-from torchtune.data import padded_collate_packed
+from torchtune.data import padded_collate_packed_prefix, padded_collate_packed
 from torchtune.datasets import ConcatDataset
 from torchtune.modules.peft import (
     get_adapter_params,
@@ -41,6 +41,7 @@ from torchtune.training import (
 from tqdm import tqdm
 
 log = utils.get_logger("DEBUG")
+torch._dynamo.config.cache_size_limit = 1000
 
 
 class LoRAFinetuneRecipeSingleDevice(FTRecipeInterface):
@@ -233,6 +234,7 @@ class LoRAFinetuneRecipeSingleDevice(FTRecipeInterface):
         self._metric_logger.log_config(cfg)
 
         self._compile = cfg.compile
+        self._use_prefix = cfg.use_prefix
         checkpoint_dict = self.load_checkpoint(cfg_checkpointer=cfg.checkpointer)
 
         # hack to toggle to the low cpu ram version of the reparametrize_as_dtype
@@ -407,6 +409,9 @@ class LoRAFinetuneRecipeSingleDevice(FTRecipeInterface):
         self.adapter_params = get_adapter_params(model)
         self._is_dora = any(["magnitude" in k for k in self.adapter_params.keys()])
         set_trainable_params(model, self.adapter_params)
+        for k, v in model.named_parameters():
+            if k == "ISE_embeddings.weight":
+                v.requires_grad_()
 
         if compile_model:
             training.compile_model(model)
@@ -543,7 +548,7 @@ class LoRAFinetuneRecipeSingleDevice(FTRecipeInterface):
                     ignore_idx=self._loss_fn.ignore_index,
                 )
                 if not packed
-                else padded_collate_packed
+                else (padded_collate_packed_prefix if self._use_prefix else padded_collate_packed)
             ),
         )
 

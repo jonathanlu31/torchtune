@@ -171,7 +171,6 @@ def packed_block_causal_mask(
         return create_block_causal_mask(seq_lens=seq_lens)
 
 def packed_prefix_block_causal_mask(
-    tokens: torch.Tensor,
     seg_ids: torch.Tensor,
     seq_lens: List[torch.Tensor],
 ) -> _MaskType:
@@ -184,9 +183,9 @@ def packed_prefix_block_causal_mask(
     Returns:
         _MaskType: _description_
     """
-    seq_ids = _get_document_ids_from_seq_lens(seq_lens).to('cuda')
+    seq_ids = _get_document_ids_from_seq_lens(seq_lens).cuda()
     batch_size, max_seq_len = seq_ids.shape
-    end_of_sys_idxs_per_seq = get_end_of_sys(seg_ids, seq_ids)
+    end_of_sys_idxs_per_seq = get_end_of_sys(seg_ids, seq_ids, seq_lens)
     def doc_mask_wrapper(b, _h, q_idx, kv_idx):
         same_doc = seq_ids[b, q_idx] == seq_ids[b, kv_idx]
         causal_mask = q_idx >= kv_idx
@@ -203,26 +202,24 @@ def packed_prefix_block_causal_mask(
         device="cuda",
     )
 
-def get_end_of_sys(seg_ids, seq_ids) -> list[torch.Tensor]:
+def get_end_of_sys(seg_ids, seq_ids, seq_lens) -> torch.Tensor:
     """
     Get the end of sys idx for each sequence in the batch.
 
     Args:
-        seg_ids (torch.Tensor): batch_size x max_seq_len
 
     Returns:
         list[torch.Tensor]: batch x num_sequences. Each item is the end of sys idx for the corresponding sequence.
     """
+    # Convert seq_lens from a list of tensors to a single padded tensor
+    seq_lens = torch.nn.utils.rnn.pad_sequence(seq_lens, batch_first=True, padding_value=0)
     # Each row has the end of sys idx for each seq in the row, except for seqs without a sys msg where it is zero instead
-    end_of_sys_idxs_per_seq = []
+    end_of_sys_idxs_per_seq = torch.zeros_like(seq_lens, dtype=torch.long).cuda()
     for i, row in enumerate(seg_ids):
         zero_mask = row == 0
-        end_of_sys_idxs = torch.nonzero(zero_mask[:-1] & ~zero_mask[1:], as_tuple=True)[0] # Technically this is incorrect if the last token is part of the system message but it doesn't matter if you only train on assistant responses
+        end_of_sys_idxs = torch.nonzero(zero_mask[:-1] & ~zero_mask[1:], as_tuple=True)[0].cuda() # Technically this is incorrect if the last token is part of the system message but it doesn't matter if you only train on assistant responses
         sequences_with_end_sys = seq_ids[i, end_of_sys_idxs]
-        num_seqs = int(torch.max(seq_ids[i]).item()) + 1
-        end_of_sys_with_zeros = torch.zeros(num_seqs, device=seg_ids.device)
-        end_of_sys_with_zeros[sequences_with_end_sys] = end_of_sys_idxs
-        end_of_sys_idxs_per_seq.append(end_of_sys_with_zeros)
+        end_of_sys_idxs_per_seq[i, sequences_with_end_sys] = end_of_sys_idxs
 
     return end_of_sys_idxs_per_seq
 

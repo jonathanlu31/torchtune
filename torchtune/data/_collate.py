@@ -546,7 +546,6 @@ def padded_collate_packed_prefix(
     seq_lens = [x["seq_lens"] for x in batch]
 
     block_mask = packed_prefix_block_causal_mask(
-        tokens=tokens,
         seg_ids=seg_ids,
         seq_lens=seq_lens,
     )
