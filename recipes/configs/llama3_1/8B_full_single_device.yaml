@@ -23,45 +23,53 @@
 # Tokenizer
 tokenizer:
   _component_: torchtune.models.llama3.llama3_tokenizer
-  path: /tmp/Meta-Llama-3.1-8B-Instruct/original/tokenizer.model
-  max_seq_len: null
+  path: /data/jonathan/models/Llama-3.1-8B/original/tokenizer.model
+  max_seq_len: 4096
 
 # Dataset
 dataset:
-  _component_: torchtune.datasets.alpaca_dataset
-seed: null
+  _component_: torchtune.datasets.chat_dataset
+  source: jonluj/system_message_sofa
+  split: train
+  conversation_column: conversations
+  conversation_style: sharegpt
+  train_on_input: False
+  packed: True
+seed: 42
 shuffle: True
 
 # Model Arguments
 model:
   _component_: torchtune.models.llama3_1.llama3_1_8b
+  use_ise: False
 
 checkpointer:
-  _component_: torchtune.training.FullModelHFCheckpointer
-  checkpoint_dir: /tmp/Meta-Llama-3.1-8B-Instruct/
+  _component_: torchtune.training.FullModelMetaCheckpointer
+  checkpoint_dir: /data/jonathan/models/Llama-3.1-8B
   checkpoint_files: [
-    model-00001-of-00004.safetensors,
-    model-00002-of-00004.safetensors,
-    model-00003-of-00004.safetensors,
-    model-00004-of-00004.safetensors
+    original/consolidated.00.pth
   ]
   recipe_checkpoint: null
-  output_dir: /tmp/Meta-Llama-3.1-8B-Instruct/
+  output_dir: /data/jonathan/models/full_ft_sofa_base
   model_type: LLAMA3
 resume_from_checkpoint: False
 
 # Fine-tuning arguments
-batch_size: 2
+batch_size: 1
 epochs: 3
 optimizer:
   _component_: bitsandbytes.optim.PagedAdamW8bit
   lr: 2e-5
+lr_scheduler:
+  _component_: torchtune.training.lr_schedulers.get_cosine_schedule_with_warmup
+  num_warmup_steps: 35
 loss:
   _component_: torchtune.modules.loss.CEWithChunkedOutputLoss
 max_steps_per_epoch: null
 gradient_accumulation_steps: 1
 optimizer_in_bwd: True
-compile: False # set it to True for better memory and performance
+compile: True # set it to True for better memory and performance
+use_prefix: False
 
 # Training environment
 device: cuda
@@ -73,10 +81,10 @@ enable_activation_checkpointing: True
 dtype: bf16
 
 # Logging
+output_dir: /scratch/jonathan/tmp/full_finetune_output_base
 metric_logger:
-  _component_: torchtune.training.metric_logging.DiskLogger
-  log_dir: ${output_dir}
-output_dir: /tmp/full-llama3.1-finetune
+  _component_: torchtune.training.metric_logging.WandBLogger
+  project: torchtune
 log_every_n_steps: 1
 log_peak_memory_stats: False
 

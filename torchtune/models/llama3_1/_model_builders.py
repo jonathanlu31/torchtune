@@ -18,7 +18,7 @@ Llama3.1 8B model.
 """
 
 
-def llama3_1_8b() -> TransformerDecoder:
+def llama3_1_8b(use_ise: bool = False) -> TransformerDecoder:
     """
     Builder for creating a Llama3.1 model initialized w/ the default 8b parameter values.
 
@@ -36,6 +36,7 @@ def llama3_1_8b() -> TransformerDecoder:
         attn_dropout=0.0,
         norm_eps=1e-5,
         rope_base=500_000,
+        use_ise=use_ise,
     )
 
 

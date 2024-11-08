@@ -50,6 +50,7 @@ def llama3_1(
     intermediate_dim: Optional[int] = None,
     norm_eps: float = 1e-5,
     scale_factor: int = 8,
+    use_ise: bool = False,
 ) -> TransformerDecoder:
     """
     Build the decoder associated with the Llama3.1 model. This includes:
@@ -111,6 +112,7 @@ def llama3_1(
 
     tok_embeddings = nn.Embedding(vocab_size, embed_dim)
     ISE_embeddings = nn.Embedding(3, embed_dim)
+    nn.init.zeros_(ISE_embeddings.weight)
     output_proj = nn.Linear(embed_dim, vocab_size, bias=False)
     return TransformerDecoder(
         tok_embeddings=tok_embeddings,
@@ -121,6 +123,7 @@ def llama3_1(
         head_dim=head_dim,
         norm=RMSNorm(embed_dim, eps=norm_eps),
         output=output_proj,
+        use_ise=use_ise,
     )
 
 def llama3_mlp(dim: int, hidden_dim: int, quantize_base: bool = False) -> FeedForward:
@@ -250,6 +253,7 @@ def lora_llama3_1(
     layers = nn.ModuleList(layers)
     tok_embeddings = nn.Embedding(vocab_size, embed_dim)
     ISE_embeddings = nn.Embedding(3, embed_dim)
+    nn.init.zeros_(ISE_embeddings.weight)
 
     # TODO: quantize_base is not applied to final output_proj currently.
     adapter_cls = DoRALinear if use_dora else LoRALinear
