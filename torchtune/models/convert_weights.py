@@ -14,6 +14,7 @@ import torch
 # state dict key mappings from Meta's format to torchtune's format
 _FROM_META = {
     "tok_embeddings.weight": "tok_embeddings.weight",
+    "ISE_embeddings.weight": "ISE_embeddings.weight",
     "norm.weight": "norm.scale",
     "output.weight": "output.weight",
     "layers.{}.attention.wk.weight": "layers.{}.attn.k_proj.weight",
