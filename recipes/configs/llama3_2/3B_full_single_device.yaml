@@ -23,14 +23,23 @@
 # Tokenizer
 tokenizer:
   _component_: torchtune.models.llama3.llama3_tokenizer
-  path: /tmp/Llama-3.2-3B-Instruct/original/tokenizer.model
-  max_seq_len: null
+  path: /scratch/public_models/huggingface/meta-llama/Llama-3.2-3B/original/tokenizer.model
+  max_seq_len: 4096
 
 # Dataset
 dataset:
-  _component_: torchtune.datasets.alpaca_dataset
+  _component_: torchtune.datasets.chat_dataset
+  source: json
+  data_files: [
+    /scratch/data/system_dataset/sudo_train_sft_torchtune.jsonl,
+    /scratch/data/system_dataset/tulu_4096_olmo_100k_torchtune.jsonl
+  ]
+  split: train
+  conversation_column: messages
+  conversation_style: openai
+  train_on_input: False
   packed: False  # True increases speed
-seed: null
+seed: 42
 shuffle: True
 
 # Model Arguments
@@ -39,43 +48,44 @@ model:
 
 checkpointer:
   _component_: torchtune.training.FullModelHFCheckpointer
-  checkpoint_dir: /tmp/Llama-3.2-3B-Instruct/
+  checkpoint_dir: /scratch/public_models/huggingface/meta-llama/Llama-3.2-3B
   checkpoint_files: [
     model-00001-of-00002.safetensors,
     model-00002-of-00002.safetensors,
   ]
   recipe_checkpoint: null
-  output_dir: /tmp/Llama-3.2-3B-Instruct/
+  output_dir: /data/jonathan/models/prefix_torchtune_sudo_llama3_2_3b
   model_type: LLAMA3_2
 resume_from_checkpoint: False
 
 # Fine-tuning arguments
 batch_size: 4
-epochs: 3
+epochs: 1
 optimizer:
   _component_: bitsandbytes.optim.PagedAdamW8bit
   lr: 2e-5
 loss:
   _component_: torchtune.modules.loss.CEWithChunkedOutputLoss
 max_steps_per_epoch: null
-gradient_accumulation_steps: 1  # Use to increase virtual batch size
-optimizer_in_bwd: True  # True saves memory. Requires gradient_accumulation_steps=1
-compile: False  # pytorch compile, set to true for better perf/memory
+gradient_accumulation_steps: 8  # Use to increase virtual batch size
+optimizer_in_bwd: False  # True saves memory. Requires gradient_accumulation_steps=1
+compile: True  # pytorch compile, set to true for better perf/memory
+clip_grad_norm: 1.0
 
 # Training environment
 device: cuda
 
 # Memory management
 enable_activation_checkpointing: True  # True reduces memory
-enable_activation_offloading: False  # True reduces memory
+enable_activation_offloading: True  # True reduces memory
 
 # Reduced precision
 dtype: bf16
 
 # Logging
 metric_logger:
-  _component_: torchtune.training.metric_logging.DiskLogger
-  log_dir: ${output_dir}
+  _component_: torchtune.training.metric_logging.WandBLogger
+  project: torchtune_llama3_2
 output_dir: /tmp/full-llama3.2-finetune
 log_every_n_steps: 1
 log_peak_memory_stats: True
